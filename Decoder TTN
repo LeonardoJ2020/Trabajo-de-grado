@@ -1,0 +1,180 @@
+function decodeUplink(input) {
+
+  var bytes = input.bytes;
+
+  // Verificamos que hayan llegado los 18 bytes esperados.
+  if (bytes.length < 18) {
+    return {
+      errors: [
+        "Payload demasiado corto. Se esperaban 18 bytes."
+      ]
+    };
+  }
+
+  // ------------------------------------------------------------
+  // Temperatura
+  // Bytes 0-1
+  // Se envía multiplicada por 10.
+  // ------------------------------------------------------------
+
+  var tempRaw =
+    (bytes[0] << 8) |
+    bytes[1];
+
+  // Convertimos de entero sin signo a entero con signo.
+  if (tempRaw & 0x8000) {
+    tempRaw -= 0x10000;
+  }
+
+  var temperatura =
+    tempRaw / 10.0;
+
+
+  // ------------------------------------------------------------
+  // Humedad
+  // Byte 2
+  // Se envía multiplicada por 2.
+  // ------------------------------------------------------------
+
+  var humedad =
+    bytes[2] / 2.0;
+
+
+  // ------------------------------------------------------------
+  // Presión atmosférica
+  // Bytes 3-4
+  // Se envía multiplicada por 10.
+  // ------------------------------------------------------------
+
+  var presionRaw =
+    (bytes[3] << 8) |
+    bytes[4];
+
+  var presion =
+    presionRaw / 10.0;
+
+
+  // ------------------------------------------------------------
+  // Velocidad del viento
+  // Bytes 5-6
+  // Se envía multiplicada por 10.
+  // ------------------------------------------------------------
+
+  var vientoRaw =
+    (bytes[5] << 8) |
+    bytes[6];
+
+  var velocidad_viento =
+    vientoRaw / 10.0;
+
+
+  // ------------------------------------------------------------
+  // Dirección del viento
+  // Bytes 7-8
+  // Se envía directamente en grados.
+  // ------------------------------------------------------------
+
+  var direccion_viento =
+    (bytes[7] << 8) |
+    bytes[8];
+
+
+  // ------------------------------------------------------------
+  // Lluvia del intervalo
+  // Bytes 9-10
+  // Se envía multiplicada por 100.
+  // ------------------------------------------------------------
+
+  var lluviaRaw =
+    (bytes[9] << 8) |
+    bytes[10];
+
+  var lluvia_intervalo =
+    lluviaRaw / 100.0;
+
+
+  // ------------------------------------------------------------
+  // Radiación UV
+  // Bytes 11-12
+  // Se envía multiplicada por 100.
+  // ------------------------------------------------------------
+
+  var uvRaw =
+    (bytes[11] << 8) |
+    bytes[12];
+
+  var uv =
+    uvRaw / 100.0;
+
+
+  // ------------------------------------------------------------
+  // Luminosidad
+  // Bytes 13-14
+  // ------------------------------------------------------------
+
+  var luminosidad =
+    (bytes[13] << 8) |
+    bytes[14];
+
+
+  // ------------------------------------------------------------
+  // Material particulado
+  // Cada variable ocupa un byte.
+  //
+  // Byte 15 = PM1.0
+  // Byte 16 = PM2.5
+  // Byte 17 = PM10
+  // ------------------------------------------------------------
+
+  var PM1_0 =
+    bytes[15];
+
+  var PM2_5 =
+    bytes[16];
+
+  var PM10 =
+    bytes[17];
+
+
+  // ------------------------------------------------------------
+  // Resultado que aparecerá en TTN
+  // ------------------------------------------------------------
+
+  return {
+    data: {
+
+      temperatura_C:
+        temperatura,
+
+      humedad_pct:
+        humedad,
+
+      presion_hPa:
+        presion,
+
+      velocidad_viento_kmh:
+        velocidad_viento,
+
+      direccion_viento_grados:
+        direccion_viento,
+
+      lluvia_intervalo_mm:
+        lluvia_intervalo,
+
+      uv:
+        uv,
+
+      luminosidad_lux:
+        luminosidad,
+
+      PM1_ug_m3:
+        PM1_0,
+
+      PM2_5_ug_m3:
+        PM2_5,
+
+      PM10_ug_m3:
+        PM10
+    }
+  };
+}
