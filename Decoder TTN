@@ -1,180 +1,67 @@
+// Payload formatter de uplink (TTN) - versión de enero 2026, corregida.
+// Formato: dos paquetes por ciclo, ambos en el puerto 1.
+//   Paquete "main"      : 15 bytes (variables ambientales)
+//   Paquete "particles" :  5 bytes (material particulado)
+// Los nombres de campo se mantienen iguales a los de la versión original
+// para no afectar la integración con AWS.
+
+// true  = agrega los bytes 3 y 4 del paquete de partículas como valores crudos
+// false = salida idéntica a la versión original
+var INCLUDE_RAW_RESERVED = true;
+
+function u16(b, i) {
+  return (b[i] << 8) | b[i + 1];
+}
+
 function decodeUplink(input) {
-
   var bytes = input.bytes;
+  var decoded = {};
+  var warnings = [];
 
-  // Verificamos que hayan llegado los 18 bytes esperados.
-  if (bytes.length < 18) {
-    return {
-      errors: [
-        "Payload demasiado corto. Se esperaban 18 bytes."
-      ]
-    };
-  }
+  // ---------------- Paquete 1: ambiental (15 bytes) ----------------
+  if (bytes.length === 15) {
+    // Temperatura: bytes 0-1, entero con signo, escala x10 (°C)
+    var tempRaw = u16(bytes, 0);
+    if (tempRaw & 0x8000) tempRaw -= 0x10000;
+    decoded.temp = tempRaw / 10.0;
 
-  // ------------------------------------------------------------
-  // Temperatura
-  // Bytes 0-1
-  // Se envía multiplicada por 10.
-  // ------------------------------------------------------------
+    decoded.hum = bytes[2] / 2.0;          // byte 2, x2 (% HR)
+    decoded.press = u16(bytes, 3) / 10.0;  // bytes 3-4, x10 (hPa)
+    decoded.windSpd = u16(bytes, 5) / 10.0;// bytes 5-6, x10 (km/h)
+    decoded.windDir = u16(bytes, 7);       // bytes 7-8 (grados)
+    decoded.rain = u16(bytes, 9) / 100.0;  // bytes 9-10, x100 (mm del intervalo)
+    decoded.uv = u16(bytes, 11) / 100.0;   // bytes 11-12, x100 (índice UV)
+    decoded.lux = u16(bytes, 13);          // bytes 13-14 (lux, máx. 65535)
+    decoded.payload_type = "main";
 
-  var tempRaw =
-    (bytes[0] << 8) |
-    bytes[1];
-
-  // Convertimos de entero sin signo a entero con signo.
-  if (tempRaw & 0x8000) {
-    tempRaw -= 0x10000;
-  }
-
-  var temperatura =
-    tempRaw / 10.0;
-
-
-  // ------------------------------------------------------------
-  // Humedad
-  // Byte 2
-  // Se envía multiplicada por 2.
-  // ------------------------------------------------------------
-
-  var humedad =
-    bytes[2] / 2.0;
-
-
-  // ------------------------------------------------------------
-  // Presión atmosférica
-  // Bytes 3-4
-  // Se envía multiplicada por 10.
-  // ------------------------------------------------------------
-
-  var presionRaw =
-    (bytes[3] << 8) |
-    bytes[4];
-
-  var presion =
-    presionRaw / 10.0;
-
-
-  // ------------------------------------------------------------
-  // Velocidad del viento
-  // Bytes 5-6
-  // Se envía multiplicada por 10.
-  // ------------------------------------------------------------
-
-  var vientoRaw =
-    (bytes[5] << 8) |
-    bytes[6];
-
-  var velocidad_viento =
-    vientoRaw / 10.0;
-
-
-  // ------------------------------------------------------------
-  // Dirección del viento
-  // Bytes 7-8
-  // Se envía directamente en grados.
-  // ------------------------------------------------------------
-
-  var direccion_viento =
-    (bytes[7] << 8) |
-    bytes[8];
-
-
-  // ------------------------------------------------------------
-  // Lluvia del intervalo
-  // Bytes 9-10
-  // Se envía multiplicada por 100.
-  // ------------------------------------------------------------
-
-  var lluviaRaw =
-    (bytes[9] << 8) |
-    bytes[10];
-
-  var lluvia_intervalo =
-    lluviaRaw / 100.0;
-
-
-  // ------------------------------------------------------------
-  // Radiación UV
-  // Bytes 11-12
-  // Se envía multiplicada por 100.
-  // ------------------------------------------------------------
-
-  var uvRaw =
-    (bytes[11] << 8) |
-    bytes[12];
-
-  var uv =
-    uvRaw / 100.0;
-
-
-  // ------------------------------------------------------------
-  // Luminosidad
-  // Bytes 13-14
-  // ------------------------------------------------------------
-
-  var luminosidad =
-    (bytes[13] << 8) |
-    bytes[14];
-
-
-  // ------------------------------------------------------------
-  // Material particulado
-  // Cada variable ocupa un byte.
-  //
-  // Byte 15 = PM1.0
-  // Byte 16 = PM2.5
-  // Byte 17 = PM10
-  // ------------------------------------------------------------
-
-  var PM1_0 =
-    bytes[15];
-
-  var PM2_5 =
-    bytes[16];
-
-  var PM10 =
-    bytes[17];
-
-
-  // ------------------------------------------------------------
-  // Resultado que aparecerá en TTN
-  // ------------------------------------------------------------
-
-  return {
-    data: {
-
-      temperatura_C:
-        temperatura,
-
-      humedad_pct:
-        humedad,
-
-      presion_hPa:
-        presion,
-
-      velocidad_viento_kmh:
-        velocidad_viento,
-
-      direccion_viento_grados:
-        direccion_viento,
-
-      lluvia_intervalo_mm:
-        lluvia_intervalo,
-
-      uv:
-        uv,
-
-      luminosidad_lux:
-        luminosidad,
-
-      PM1_ug_m3:
-        PM1_0,
-
-      PM2_5_ug_m3:
-        PM2_5,
-
-      PM10_ug_m3:
-        PM10
+    if (decoded.lux === 65535) {
+      warnings.push("Iluminancia en el maximo representable (65535 lux): posible saturacion");
     }
+    return { data: decoded, warnings: warnings, errors: [] };
+  }
+
+  // ---------------- Paquete 2: particulas (5 bytes) ----------------
+  if (bytes.length === 5) {
+    decoded.pm1_0 = bytes[0];   // ug/m3, uint8 (0-255)
+    decoded.pm2_5 = bytes[1];
+    decoded.pm10 = bytes[2];
+    decoded.payload_type = "particles";
+
+    if (INCLUDE_RAW_RESERVED) {
+      // Bytes 3 y 4: contenido no documentado, se exponen sin interpretar
+      decoded.reserved_b3 = bytes[3];
+      decoded.reserved_b4 = bytes[4];
+    }
+    if (bytes[0] === 255 || bytes[1] === 255 || bytes[2] === 255) {
+      warnings.push("Valor de particulas en 255 ug/m3 (maximo de 1 byte): posible saturacion");
+    }
+    return { data: decoded, warnings: warnings, errors: [] };
+  }
+
+  // ---------------- Longitud no reconocida ----------------
+  return {
+    data: { payload_type: "unknown", length: bytes.length },
+    warnings: ["Tamano de payload no reconocido: " + bytes.length + " bytes"],
+    errors: []
   };
 }
