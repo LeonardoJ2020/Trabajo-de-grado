@@ -36,7 +36,7 @@ int rainfallPin      = 15;   // Digital - Pluviómetro (medición directa)
 SFEWeatherMeterKit weatherMeterKit(windDirectionPin, windSpeedPin, rainfallPin);
 
 // -------------------- microSD --------------------
-#define SD_CS 13   // ⚠️ AJUSTA este pin según tu cableado real de la SD
+#define SD_CS 13   
 bool sdDisponible = false;
 const char* ARCHIVO_PENDIENTES = "/pending.csv";
 const char* ARCHIVO_TEMP       = "/pending.tmp";
