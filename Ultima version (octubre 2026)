@@ -1,8 +1,7 @@
-/*********************************************************************
-  Estación Meteorológica Completa + TTN (OTAA) - Envío CADA 5 MINUTOS
-  Dirección del viento en español + mediciones directas de viento y lluvia
+//
+  Estación Meteorológica ultima version- envio de datos lorawan + TTN (OTAA) - Envío CADA 5 MINUTOS
   + Respaldo en microSD cuando falla el envío LoRaWAN
-*********************************************************************/
+//
 
 #include <Wire.h>
 #include <SPI.h>
@@ -31,8 +30,8 @@ DFRobot_AirQualitySensor particle(&Wire, SEN0460_ADDR);
 
 // -------------------- Sensor meteorológico DS-15901 --------------------
 int windDirectionPin = 35;   // ADC - Veleta
-int windSpeedPin     = 14;   // Digital - Anemómetro (medición directa)
-int rainfallPin      = 15;   // Digital - Pluviómetro (medición directa)
+int windSpeedPin     = 14;   // Digital - Anemómetro 
+int rainfallPin      = 15;   // Digital - Pluviómetro 
 SFEWeatherMeterKit weatherMeterKit(windDirectionPin, windSpeedPin, rainfallPin);
 
 // -------------------- microSD --------------------
@@ -43,7 +42,7 @@ const char* ARCHIVO_TEMP       = "/pending.tmp";
 
 // -------------------- Variables globales para envío TTN --------------------
 unsigned long ultimoEnvioTTN = 0;
-const unsigned long intervaloTTN = 5UL * 60UL * 1000UL;  // CADA 5 MINUTOS
+const unsigned long intervaloTTN = 5UL * 60UL * 1000UL;  
 
 float lluviaInicioIntervalo = 0.0;
 
@@ -84,8 +83,7 @@ void reiniciarConMensaje(const char* motivo) {
 // ==================== HELPERS microSD (cola de pendientes) ====================
 
 // Convierte un payload binario a texto hexadecimal y lo agrega como
-// una nueva línea en /pending.csv, precedido por millis() (referencia
-// de tiempo relativa, útil para depurar el orden de la cola).
+// una nueva línea en /pending.csv, precedido por millis() 
 void encolarPendiente(uint8_t* payload, size_t len) {
   if (!sdDisponible) return;
   File f = SD.open(ARCHIVO_PENDIENTES, FILE_APPEND);
@@ -103,7 +101,7 @@ void encolarPendiente(uint8_t* payload, size_t len) {
   f.close();
 }
 
-// ¿Hay al menos un registro pendiente en la SD?
+
 bool hayPendientes() {
   if (!sdDisponible) return false;
   if (!SD.exists(ARCHIVO_PENDIENTES)) return false;
@@ -139,8 +137,6 @@ bool obtenerPrimerPendiente(uint8_t* payload, size_t len) {
   return true;
 }
 
-// Elimina la primera línea de /pending.csv (ya fue enviada con éxito),
-// reescribiendo el resto del archivo mediante un archivo temporal.
 void eliminarPrimerPendiente() {
   if (!sdDisponible) return;
   File origen = SD.open(ARCHIVO_PENDIENTES, FILE_READ);
@@ -181,9 +177,7 @@ void eliminarPrimerPendiente() {
   SD.remove(ARCHIVO_TEMP);
 }
 
-// Cuenta cuántos registros hay en la cola (solo para mostrar en pantalla;
-// si la cola crece mucho esto se vuelve costoso, pero es aceptable para
-// backlogs de horas/días de una estación de 5 min por lectura).
+// Cuenta cuántos registros hay en  cola 
 uint16_t contarPendientes() {
   if (!hayPendientes()) return 0;
   File f = SD.open(ARCHIVO_PENDIENTES, FILE_READ);
@@ -221,7 +215,7 @@ void setup() {
   display.println("Iniciando...");
   display.display();
 
-  // ---- microSD: no es crítica, si falla se continúa sin respaldo ----
+  //  microSD: si hay fallo se continúa sin respaldo 
   if (SD.begin(SD_CS)) {
     sdDisponible = true;
     Serial.println("✅ microSD OK");
@@ -234,7 +228,7 @@ void setup() {
     Serial.println("⚠️ microSD no detectada, se continúa SIN respaldo local");
   }
 
-  // ---- SEN0501: reintento acotado en vez de while(...) infinito ----
+  //  SEN0501: reintento acotado en vez de while(...) 
   uint8_t intentosEnv = 0;
   while (environment.begin() != 0) {
     Serial.println(F("⚠️ Reintentando SEN0501..."));
@@ -260,7 +254,7 @@ void setup() {
   weatherMeterKit.begin();
   Serial.println("✅ Weather Meter OK");
 
-  // ---- LoRaWAN JOIN: sin while(true) sin salida ----
+  //  LoRaWAN JOIN: sin while(true) 
   int16_t state = radio.begin();
   uint8_t intentosRadio = 0;
   while (state != RADIOLIB_ERR_NONE) {
@@ -285,7 +279,7 @@ void setup() {
     state = node.beginOTAA(joinEUI, devEUI, nwkKey, appKey);
   }
 
-  // ---- JOIN OTAA: reintentos acotados (antes era while(true) eterno) ----
+  // JOIN OTAA 
   uint8_t intentosJoin = 0;
   while (true) {
     state = node.activateOTAA();
@@ -297,7 +291,7 @@ void setup() {
     Serial.printf("⚠️ Intento JOIN %d/%d fallido (código %d)\n",
                   intentosJoin, MAX_INTENTOS_JOIN, state);
     if (intentosJoin >= MAX_INTENTOS_JOIN) {
-      // No perdemos nada: si hay datos futuros y el join sigue fallando
+      // No se pierde nada: si hay datos futuros y el join sigue fallando
       // tras reiniciar, seguirán respaldándose en la SD igualmente.
       reiniciarConMensaje("No se pudo unir a TTN");
     }
@@ -334,15 +328,14 @@ void loop() {
   float windSpdMedida = weatherMeterKit.getWindSpeed();
   float rainTotal = weatherMeterKit.getTotalRainfall();
 
-  // Usar únicamente las mediciones reales de los sensores.
-  // No se realizan estimaciones ni sustituciones de valores.
+  
   float windSpd = windSpdMedida;
 
   // Lluvia medida por el pluviómetro DS-15901 durante el intervalo.
   float lluviaNueva = rainTotal - lluviaInicioIntervalo;
   if (lluviaNueva < 0.0) lluviaNueva = 0.0;
 
-  // =================== Mostrar en Serial ===================
+  // Datos para visualizar en el moniotr serial
   Serial.println("===== SEN0501 =====");
   Serial.printf("Temp: %.2f°C | Hum: %.2f%% | UV: %.2f | Luz: %.0f lx | Pres: %.1f hPa\n", tempC, hum, uv, lux, press);
   if (particle.begin()) {
@@ -353,7 +346,7 @@ void loop() {
   Serial.printf("Dir: %s (%.0f°) | Vel: %.2f km/h (medida) | Lluvia intervalo: %.2f mm (medida)\n",
                 windDirEspanol, windDirGrados, windSpd, lluviaNueva);
 
-  // =================== Mostrar en OLED ===================
+  // Datos para visualizar en la pantalla OLED
   display.clearDisplay();
   display.setCursor(0, 0);
   display.println(" Weather Station");
@@ -365,7 +358,7 @@ void loop() {
   display.print("Lluvia: "); display.print(lluviaNueva, 2); display.println(" mm");
   display.display();
 
-  // =================== Envío a TTN cada 5 minutos ===================
+  //  Envío a TTN cada 5 minutos 
   if (millis() - ultimoEnvioTTN >= intervaloTTN) {
     uint8_t payload[20] = {0};
 
@@ -381,7 +374,7 @@ void loop() {
     payload[16] = constrain(PM2_5, 0, 255);
     payload[17] = constrain(PM10, 0, 255);
 
-    // ---- NUEVO: si hay backlog en SD, se prioriza reenviar el más antiguo ----
+    // Ajuste: si hay backlog en SD, se prioriza reenviar el más antiguo 
     bool esDeCola = false;
     uint8_t payloadAEnviar[20];
 
